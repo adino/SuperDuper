@@ -3,8 +3,11 @@ require 'digest/sha1'
 
 # run through directory hierarchy and identify duplicate files
 def get_files_from_dir(dir)
+    STDOUT.printf "Walking directory tree:"
+    STDOUT.flush
     files = Hash.new { |h,k| h[k] = [] }
     inner_get_files_from_dir(dir, files)
+    STDOUT.printf "\n"
     return files
 end
 
@@ -17,6 +20,8 @@ def inner_get_files_from_dir(dir, files)
         else
             details = get_file_details(entry_path)
             files[details[:short_digest]] << details
+            STDOUT.printf "\rWalking directory tree: %d", files.size
+            STDOUT.flush if files.size % 100 == 1
         end
     end
 end
@@ -52,16 +57,17 @@ def get_file_details(file)
 end
 
 def print_dupes(hash)
-    STDOUT.printf "Detecting duplicates based on short hash from #{hash.size} files ... "
-    STDOUT.flush
+    STDOUT.printf "Detecting duplicates based on short hash from #{hash.size} files.\n"
     full_dupes = Hash.new { |h,k| h[k] = [] }
     hash.select { |k,v| v.size > 1 }.each { |short_hash, short_dupes|
         short_dupes.each { |details|
             full_digest = Digest::SHA1.file(details[:path]).hexdigest
             full_dupes[full_digest] << details.merge!({:full_digest=>full_digest})
+            STDOUT.printf "\rCalculating full digest: %d", full_dupes.size
+            STDOUT.flush if full_dupes.size % 100 == 1
         }
     }
-    STDOUT.printf " Done.\n"
+    STDOUT.printf "\n"
     STDOUT.printf "Detecting duplicates based on full hash from #{full_dupes.size} files:\n"
     STDOUT.flush
 
