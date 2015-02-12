@@ -1,17 +1,21 @@
 require 'pp'
 require 'digest/sha1'
+require 'optparse'
 
 # run through directory hierarchy and identify duplicate files
-def get_files_from_dir(dir)
-    STDOUT.printf "Walking directory tree:"
-    STDOUT.flush
+def get_files()
+    dir = $options[:directory] || "./"
+    $options[:exclude_paths].map! { |path| File.join(dir, path) }
+
+    output "Walking directory tree #{dir}\n"
     files = Hash.new { |h,k| h[k] = [] }
     inner_get_files_from_dir(dir, files)
-    STDOUT.printf "\n"
+    progress(true, "\n")
     return files
 end
 
 def inner_get_files_from_dir(dir, files)
+    return if $options[:exclude_paths] && $options[:exclude_paths].include?(dir)
     Dir.foreach(dir) do |entry|
         next if entry == '.' || entry == '..'
         entry_path = File.join(dir, entry)
@@ -20,8 +24,7 @@ def inner_get_files_from_dir(dir, files)
         else
             details = get_file_details(entry_path)
             files[details[:short_digest]] << details
-            STDOUT.printf "\rWalking directory tree: %d", files.size
-            STDOUT.flush if files.size % 100 == 1
+            progress(files.size % 100 == 1, "\r- %d", files.size)
         end
     end
 end
@@ -56,20 +59,30 @@ def get_file_details(file)
                     :short_digest => short_digest.hexdigest, :full_digest => nil})
 end
 
+def progress(flush, *args)
+    if $options[:progress] then
+        STDOUT.printf(*args)
+        STDOUT.flush if flush
+    end
+end
+
+def output(*args)
+    return if $options[:quiet]
+    STDOUT.printf *args
+end
+
 def print_dupes(hash)
-    STDOUT.printf "Detecting duplicates based on short hash from #{hash.size} files.\n"
+    output "Detecting duplicates based on short hash from #{hash.size} files.\n"
     full_dupes = Hash.new { |h,k| h[k] = [] }
     hash.select { |k,v| v.size > 1 }.each { |short_hash, short_dupes|
         short_dupes.each { |details|
             full_digest = Digest::SHA1.file(details[:path]).hexdigest
             full_dupes[full_digest] << details.merge!({:full_digest=>full_digest})
-            STDOUT.printf "\rCalculating full digest: %d", full_dupes.size
-            STDOUT.flush if full_dupes.size % 100 == 1
+            progress(full_dupes.size % 100 == 1, "\rCalculating full digest: %d", full_dupes.size)
         }
     }
-    STDOUT.printf "\n"
-    STDOUT.printf "Detecting duplicates based on full hash from #{full_dupes.size} files:\n"
-    STDOUT.flush
+    progress(true, "\n")
+    output "Detecting duplicates based on full hash from #{full_dupes.size} files:\n"
 
     full_dupes.select{ |k,v| v.size > 1}.each do |full_hash, full_dupes|
         puts "Duplicates for long hash #{full_hash}"
@@ -79,16 +92,28 @@ def print_dupes(hash)
     end
 end
 
-def usage
-    puts "\nruby super_duper.rb [-h|--help] [<directory>]"
-    puts "  <directory> where to look for duplicates (default: .)"
-end
- 
-if ARGV[0]=='--help' || ARGV[0]=='-h' then
-    usage
-    exit 0
+$options = {quiet: false, progess: true, directory: './', exclude_paths:[]}
+opt_parser = OptionParser.new do |opts|
+  opts.banner = "Usage: super_duper.rb [options]"
+  opts.on_tail("-h", "--help", "Run verbosely") { puts opts; exit 0}
+  opts.on("-d", "--directory DIRECTORY", "Proceed from directory DIRECTORY (default: ./)") { |dir|
+    $options[:directory] = dir.to_s
+  }
+  opts.on("-x", "--exclude PATH", "Exclude PATH and it's children from traversal. Use -x aaa -x bbb to ignore both aaa and bbb") { |path|
+    $options[:exclude_paths] << path.to_s
+  } 
+  opts.on("-p", "--[no-]progress", "Suppress progress indicators (default: false)") { |progress|
+    $options[:progress] = progress
+  } 
+  opts.on("-q", "--quiet", "Only output duplicates, no messages (default: false)") { $options[:quiet] = true }
 end
 
-dir = ARGV[0] || '.'
-
-print_dupes(get_files_from_dir(dir))
+begin
+    opt_parser.parse(ARGV)
+rescue OptionParser::ParseError => e
+  puts e
+  puts opt_parser
+  exit 1
+end
+pp $options
+print_dupes(get_files)
