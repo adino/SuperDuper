@@ -52,17 +52,22 @@ def get_file_details(file)
 end
 
 def print_dupes(hash)
+    STDOUT.printf "Detecting duplicates based on short hash from #{hash.size} files ... "
+    STDOUT.flush
     full_dupes = Hash.new { |h,k| h[k] = [] }
-    hash.select { |k,v| v.size > 1 }.each { |k, files|
-        files.each { |details|
-            full_digest = Digest::SHA1.file(details[:path])
-            full_dupes[full_digest] <<  details
+    hash.select { |k,v| v.size > 1 }.each { |short_hash, short_dupes|
+        short_dupes.each { |details|
+            full_digest = Digest::SHA1.file(details[:path]).hexdigest
+            full_dupes[full_digest] << details.merge!({:full_digest=>full_digest})
         }
     }
+    STDOUT.printf " Done.\n"
+    STDOUT.printf "Detecting duplicates based on full hash from #{full_dupes.size} files:\n"
+    STDOUT.flush
 
-    full_dupes.each do |k, v|
-        puts "Duplicates for long hash #{k}"
-        v.sort_by { |e| e[:mtime] }.reverse.each do |details|
+    full_dupes.select{ |k,v| v.size > 1}.each do |full_hash, full_dupes|
+        puts "Duplicates for long hash #{full_hash}"
+        full_dupes.sort_by { |e| e[:mtime] }.reverse.each do |details|
             puts "\tFile: #{File.join(details[:path], details[:name])} , Modified: #{details[:mtime]}, Size: #{details[:size]}"
         end
     end
