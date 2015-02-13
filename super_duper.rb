@@ -2,25 +2,26 @@ require 'pp'
 require 'digest/sha1'
 require 'optparse'
 
+# Default options
+$options = {quiet: false, progress: true, directory: '.', exclude_paths:[]}
 # run through directory hierarchy and identify duplicate files
 def get_files()
-    dir = $options[:directory] || "./"
-    $options[:exclude_paths].map! { |path| File.join(dir, path) }
+    $options[:exclude_paths].map! { |path| File.join($options[:directory], path) }
 
-    output "Walking directory tree #{dir}\n"
+    output "Walking directory tree #{$options[:directory]}\n"
     files = Hash.new { |h,k| h[k] = [] }
-    inner_get_files_from_dir(dir, files)
+    get_files_from_dir($options[:directory], files)
     progress(true, "\n")
     return files
 end
 
-def inner_get_files_from_dir(dir, files)
+def get_files_from_dir(dir, files)
     return if $options[:exclude_paths] && $options[:exclude_paths].include?(dir)
     Dir.foreach(dir) do |entry|
         next if entry == '.' || entry == '..'
         entry_path = File.join(dir, entry)
         if File.directory? entry_path then
-            inner_get_files_from_dir entry_path, files
+            get_files_from_dir entry_path, files
         else
             details = get_file_details(entry_path)
 
@@ -100,7 +101,6 @@ def print_dupes(hash)
     end
 end
 
-$options = {quiet: false, progress: true, directory: './', exclude_paths:[]}
 opt_parser = OptionParser.new do |opts|
   opts.banner = "Usage: super_duper.rb [options]"
   opts.on_tail("-h", "--help", "Run verbosely") { puts opts; exit 0}
