@@ -53,7 +53,7 @@ def get_file_details(file)
     stats = File.stat file
     short_digest = Digest::SHA1.new
     File.open(file) { |f|
-        if stats.size < 8192 then
+        if stats.size <= 8192 then
             short_digest << f.read
         else
             short_digest << f.read(4096)
@@ -64,7 +64,7 @@ def get_file_details(file)
     details.merge!({:atime => stats.atime, :mtime => stats.mtime, :ctime => stats.ctime, 
                     :size => stats.size, 
                     :short_digest => short_digest.hexdigest, 
-                    :full_digest => (stats.size < 8192) ? nil : short_digest.hexdigest 
+                    :full_digest => (stats.size > 8192) ? nil : short_digest.hexdigest 
                   })
 end
 
@@ -83,17 +83,17 @@ end
 def print_dupes(hash)
     output "Detecting duplicates based on short hash from #{hash.size} files.\n"
     full_dupes = Hash.new { |h,k| h[k] = [] }
-    hash.select { |k,v| v.size > 1 }.each { |short_hash, short_dupes|
+    hash.select { |k,v| v.size > 1 }.each { |short_digest, short_dupes|
         short_dupes.each { |details|
             full_dupes[details[:full_digest]] << details
             progress(full_dupes.size % 100 == 1, "\rDuplicates based on full digest: %d", full_dupes.size)
         }
     }
     progress(true, "\n")
-    output "Detecting duplicates based on full hash from #{full_dupes.size} files:\n"
+    output "Detecting duplicates based on full hash from #{full_dupes.size} short digest collisions:\n"
 
-    full_dupes.select{ |k,v| v.size > 1}.each do |full_hash, full_dupes|
-        puts "Duplicates for long hash #{full_hash}"
+    full_dupes.select{ |k,v| v.size > 1}.each do |full_digest, full_dupes|
+        puts "Duplicates for full_digest #{full_digest}"
         full_dupes.sort_by { |e| e[:mtime] }.reverse.each do |details|
             puts "\tFile: #{File.join(details[:path], details[:name])} , Modified: #{details[:mtime]}, Size: #{details[:size]}"
         end
