@@ -23,6 +23,12 @@ def inner_get_files_from_dir(dir, files)
             inner_get_files_from_dir entry_path, files
         else
             details = get_file_details(entry_path)
+
+	    if files.has_key?(details[:short_digest]) then
+            	full_digest = Digest::SHA1.file(details[:path]).hexdigest
+            	details.merge!({:full_digest=>full_digest})
+	    end
+		
             files[details[:short_digest]] << details
             progress(files.size % 100 == 1, "\r- %d", files.size)
         end
@@ -76,9 +82,8 @@ def print_dupes(hash)
     full_dupes = Hash.new { |h,k| h[k] = [] }
     hash.select { |k,v| v.size > 1 }.each { |short_hash, short_dupes|
         short_dupes.each { |details|
-            full_digest = Digest::SHA1.file(details[:path]).hexdigest
-            full_dupes[full_digest] << details.merge!({:full_digest=>full_digest})
-            progress(full_dupes.size % 100 == 1, "\rCalculating full digest: %d", full_dupes.size)
+            full_dupes[details[:full_digest]] << details
+            progress(full_dupes.size % 100 == 1, "\rDuplicates based on full digest: %d", full_dupes.size)
         }
     }
     progress(true, "\n")
@@ -92,7 +97,7 @@ def print_dupes(hash)
     end
 end
 
-$options = {quiet: false, progess: true, directory: './', exclude_paths:[]}
+$options = {quiet: false, progress: true, directory: './', exclude_paths:[]}
 opt_parser = OptionParser.new do |opts|
   opts.banner = "Usage: super_duper.rb [options]"
   opts.on_tail("-h", "--help", "Run verbosely") { puts opts; exit 0}
@@ -115,5 +120,5 @@ rescue OptionParser::ParseError => e
   puts opt_parser
   exit 1
 end
-pp $options
 print_dupes(get_files)
+exit 0
