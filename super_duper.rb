@@ -24,7 +24,7 @@ def inner_get_files_from_dir(dir, files)
         else
             details = get_file_details(entry_path)
 
-	    if files.has_key?(details[:short_digest]) then
+	    if files.has_key?(details[:short_digest]) && details[:full_digest].nil? then
             	full_digest = Digest::SHA1.file(details[:path]).hexdigest
             	details.merge!({:full_digest=>full_digest})
 	    end
@@ -61,8 +61,11 @@ def get_file_details(file)
             short_digest << f.read(4096)
         end
     }
-    details.merge!({:atime => stats.atime, :mtime => stats.mtime, :ctime => stats.ctime, :size => stats.size, 
-                    :short_digest => short_digest.hexdigest, :full_digest => nil})
+    details.merge!({:atime => stats.atime, :mtime => stats.mtime, :ctime => stats.ctime, 
+                    :size => stats.size, 
+                    :short_digest => short_digest.hexdigest, 
+                    :full_digest => (stats.size < 8192) ? nil : short_digest.hexdigest 
+                  })
 end
 
 def progress(flush, *args)
